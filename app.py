@@ -9,6 +9,9 @@ from google import genai
 import os
 from pydantic import BaseModel
 from typing import List
+import tempfile
+from pathlib import Path
+from datetime import datetime
 
 # Gemini API 설정
 client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
@@ -156,20 +159,21 @@ def run_translation():
             chunk["translated"] = formatted
 
         progress_placeholder.progress((i + 1) / total, text=f"🔄 번역 중... {i + 1} / {total} 청크 완료")
-
-    output_path = "/content/translated.docx"
-    doc.save(output_path)
-    st.session_state.output_path = output_path
+    
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp_file:
+        doc.save(tmp_file.name)
+        st.session_state.output_path = tmp_file.name
+    
     st.session_state.translated = True
 
-# 파일 제거 시 상태 초기화
+# 파일 제거 or 변경 시 상태 초기화
 if uploaded_file is None:
     st.session_state.translated = False
     st.session_state.output_path = None
     st.session_state.parsed_elements = []
     st.session_state.chunked_elements = []
-
-if uploaded_file:
+    st.session_state.base_filename = ""
+else:
     new_filename = uploaded_file.name
     if st.session_state.get("last_uploaded_filename") != new_filename:
         st.session_state.translated = False
@@ -177,6 +181,7 @@ if uploaded_file:
         st.session_state.parsed_elements = []
         st.session_state.chunked_elements = []
         st.session_state.last_uploaded_filename = new_filename
+        st.session_state.base_filename = Path(new_filename).stem
 
 # 파일 업로드 시 문서 파싱
 if uploaded_file and not st.session_state.translated:
@@ -193,11 +198,13 @@ if uploaded_file and not st.session_state.translated:
 if st.session_state.translated:
     st.success("✅ 번역이 완료되었습니다!")
 
+    download_filename = f"{st.session_state.base_filename}_translated_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+    
     with open(st.session_state.output_path, "rb") as f:
         st.download_button(
             label="📥 번역된 .docx 다운로드",
             data=f,
-            file_name="translated.docx",
+            file_name=download_filename,
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         )
 

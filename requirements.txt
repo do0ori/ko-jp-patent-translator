@@ -1,0 +1,6 @@
+streamlit
+pandas
+python-docx
+pillow
+google-generativeai
+pydantic

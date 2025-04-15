@@ -29,7 +29,7 @@ def translate_text_with_gemini(text: str) -> str:
     prompt = (
         "Translate the following Korean patent document text into Japanese. "
         "Translate it naturally, but maintain technical and structural fidelity. "
-        "Translate domain-specific technical terms with reference to official or trusted Japanese sources."
+        "Translate domain-specific technical terms with reference to official or trusted Japanese sources, rather than literal translation."
     )
     response = client.models.generate_content(
         model="gemini-2.0-flash",

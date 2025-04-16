@@ -1,6 +1,7 @@
 from io import BytesIO
 
 from docx import Document
+from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.oxml.ns import qn
 from docx.shared import Pt
 from PIL import Image
@@ -56,4 +57,16 @@ def create_japanese_patent_docx():
     font.name = "MS Gothic"
     font.size = Pt(10.5)
     style._element.rPr.rFonts.set(qn("w:eastAsia"), "MS Gothic")
+
+    # Helper function to add justified paragraphs
+    def add_paragraph_with_justify(doc, text=""):
+        paragraph = doc.add_paragraph(text)
+        paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.JUSTIFY
+        return paragraph
+
+    # Attach the helper function to the document object for convenience
+    doc.add_paragraph_with_justify = lambda text="": add_paragraph_with_justify(
+        doc, text
+    )
+
     return doc

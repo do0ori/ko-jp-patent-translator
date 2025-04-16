@@ -76,16 +76,16 @@ def run_translation():
                     if not (line.startswith("【") and line.endswith("】")):
                         paragraph_number = f" 【{paragraph_counter:04d}】"
                         paragraph_counter += 1
-                        doc.add_paragraph(" " + paragraph_number)
-                    doc.add_paragraph(" " + line)
+                        doc.add_paragraph_with_justify(" " + paragraph_number)
+                    doc.add_paragraph_with_justify(" " + line)
                 else:
-                    doc.add_paragraph("")
+                    doc.add_paragraph_with_justify("")
             chunk["translated"] = translated
         elif chunk["type"] == "FIGURE":
             translated_pairs = translate_image_with_gemini(chunk["content"])
             formatted = [f"{p.original}: {p.translated}" for p in translated_pairs]
             for line in formatted:
-                doc.add_paragraph(line)
+                doc.add_paragraph_with_justify(line)
             chunk["translated"] = formatted
 
         progress_placeholder.progress(

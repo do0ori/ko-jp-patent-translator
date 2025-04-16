@@ -53,7 +53,7 @@ def create_japanese_patent_docx():
     doc = Document()
     style = doc.styles["Normal"]
     font = style.font
-    font.name = "MS Mincho"
+    font.name = "MS Gothic"
     font.size = Pt(10.5)
-    style._element.rPr.rFonts.set(qn("w:eastAsia"), "ＭＳ 明朝")
+    style._element.rPr.rFonts.set(qn("w:eastAsia"), "MS Gothic")
     return doc

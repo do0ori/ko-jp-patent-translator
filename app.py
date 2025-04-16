@@ -65,11 +65,21 @@ if uploaded_file and not st.session_state.translated:
 def run_translation():
     doc = create_japanese_patent_docx()
     total = len(st.session_state.chunked_elements)
+    paragraph_counter = 1
 
     for i, chunk in enumerate(st.session_state.chunked_elements):
         if chunk["type"] == "TEXT":
             translated = translate_text_with_gemini(chunk["content"])
-            doc.add_paragraph(translated)
+            for line in translated.split("\n"):
+                if line.strip():
+                    # 제목은 단락 번호를 붙이지 않음 -> 제목이 아닌 linen에 대해 단락 번호 추가
+                    if not (line.startswith("【") and line.endswith("】")):
+                        paragraph_number = f" 【{paragraph_counter:04d}】"
+                        paragraph_counter += 1
+                        doc.add_paragraph(" " + paragraph_number)
+                    doc.add_paragraph(" " + line)
+                else:
+                    doc.add_paragraph("")
             chunk["translated"] = translated
         elif chunk["type"] == "FIGURE":
             translated_pairs = translate_image_with_gemini(chunk["content"])

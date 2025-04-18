@@ -27,7 +27,7 @@ if "chunked_elements" not in st.session_state:
 st.set_page_config(page_title="한일 특허 번역기", layout="centered")
 st.title("📄 한일 특허 번역기")
 st.markdown(
-    "업로드한 특허 문서를 자동 분석하여 Ai 기반으로 한일 번역 문서를 생성합니다."
+    "업로드한 특허 문서를 자동 분석하여 AI 기반으로 한일 번역 문서를 생성합니다."
 )
 
 # 파일 업로드

@@ -65,18 +65,22 @@ if uploaded_file and not st.session_state.translated:
 def run_translation():
     doc = create_japanese_patent_docx()
     total = len(st.session_state.chunked_elements)
-    paragraph_counter = 1
+    paragraph_counter = 0
 
     for i, chunk in enumerate(st.session_state.chunked_elements):
         if chunk["type"] == "TEXT":
             translated = translate_text_with_gemini(chunk["content"])
             for line in translated.split("\n"):
                 if line.strip():
-                    # 제목은 단락 번호를 붙이지 않음 -> 제목이 아닌 linen에 대해 단락 번호 추가
+                    # 제목은 단락 번호를 붙이지 않음 -> 제목이 아닌 line에 대해 단락 번호 추가
                     if not (line.startswith("【") and line.endswith("】")):
-                        paragraph_number = f" 【{paragraph_counter:04d}】"
-                        paragraph_counter += 1
-                        doc.add_paragraph_with_justify(" " + paragraph_number)
+                        # 첫 번째 단락은 특허 명칭에 대한 단락이므로 번호를 붙이지 않음
+                        if paragraph_counter == 0:
+                            paragraph_counter += 1
+                        else:
+                            paragraph_number = f" 【{paragraph_counter:04d}】"
+                            paragraph_counter += 1
+                            doc.add_paragraph_with_justify(" " + paragraph_number)
                     doc.add_paragraph_with_justify(" " + line)
                 else:
                     doc.add_paragraph_with_justify("")

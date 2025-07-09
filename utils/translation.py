@@ -6,6 +6,12 @@ from google import genai
 from google.genai.errors import ClientError
 from pydantic import BaseModel
 
+from utils.config import (
+    GEMINI_MODEL_NAME,
+    IMAGE_TRANSLATION_PROMPT,
+    TEXT_TRANSLATION_PROMPT,
+)
+
 # Gemini API 설정
 client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 
@@ -62,14 +68,9 @@ def retry_with_delay(func, *args, max_retries=5, default_delay=10, **kwargs):
 
 def translate_text_with_gemini(text: str) -> str:
     def call_gemini_api():
-        prompt = (
-            "Translate the following Korean patent document text into Japanese. "
-            "Translate it naturally, but maintain technical and structural fidelity. "
-            "Translate domain-specific technical terms with reference to official or trusted Japanese sources, rather than literal translation."
-        )
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=[prompt, text],
+            model=GEMINI_MODEL_NAME,
+            contents=[TEXT_TRANSLATION_PROMPT, text],
             config={
                 "response_mime_type": "application/json",
                 "response_schema": TranslationResult,
@@ -82,13 +83,9 @@ def translate_text_with_gemini(text: str) -> str:
 
 def translate_image_with_gemini(pil_image) -> list[ImageTranslation]:
     def call_gemini_api():
-        prompt = (
-            "Extract all visible Korean or English text from this image, and translate each into Japanese. "
-            "Format the result as a list of objects with 'original' and 'translated' keys."
-        )
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=[prompt, pil_image],
+            model=GEMINI_MODEL_NAME,
+            contents=[IMAGE_TRANSLATION_PROMPT, pil_image],
             config={
                 "response_mime_type": "application/json",
                 "response_schema": list[ImageTranslation],

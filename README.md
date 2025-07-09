@@ -24,10 +24,16 @@
 ```
 ※ 현재는 사전 사용 안하는 버전 & 비용 이슈로 무료인 Gemini api 사용
 
-##  TODO
-- [x] 기초 파이프라인 구축
-- [ ] prompt 개선하기 (전체적인 문장 자체는 임의 변형 없이 직독직해, 전문 용어는 직독직해가 아니라 실제 일본에서 사용하는 형태로)
-- [ ] 용어 사전 사용하는 버전 도입하기 (AI + 외부 검색 도구)
+## 실행
+
+-   `.streamlit/secrets.toml` 파일 생성
+    ```
+    GEMINI_API_KEY = "your_gemini_api_key"
+    ```
+-   앱 실행
+    ```
+    python -m streamlit run app.py
+    ```
 
 ## 참고자료
 https://ai.google.dev/gemini-api/docs/structured-output?hl=ko&lang=python

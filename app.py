@@ -12,6 +12,7 @@ from utils import (
     translate_image_with_gemini,
     translate_text_with_gemini,
 )
+from utils.models import get_model_list, get_default_model
 
 # 초기 상태
 if "translated" not in st.session_state:
@@ -22,6 +23,8 @@ if "parsed_elements" not in st.session_state:
     st.session_state.parsed_elements = []
 if "chunked_elements" not in st.session_state:
     st.session_state.chunked_elements = []
+if "selected_model" not in st.session_state:
+    st.session_state.selected_model = get_default_model()
 
 # 페이지 기본 정보
 st.set_page_config(page_title="한일 특허 번역기", layout="centered")
@@ -29,6 +32,33 @@ st.title("📄 한일 특허 번역기")
 st.markdown(
     "업로드한 특허 문서를 자동 분석하여 AI 기반으로 한일 번역 문서를 생성합니다."
 )
+
+# 모델 선택 섹션
+models = get_model_list()
+
+# 모델 선택 옵션 생성
+model_options = []
+for model_id, model_info in models.items():
+    display_name = model_info["name"]
+    if model_info.get("recommended", False):
+        display_name += " ⭐ (추천)"
+    model_options.append((model_id, display_name))
+
+# 모델 선택 드롭다운
+selected_model_id = st.selectbox(
+    "🤖 번역에 사용할 AI 모델을 선택하세요",
+    options=[opt[0] for opt in model_options],
+    index=[opt[0] for opt in model_options].index(st.session_state.selected_model),
+    format_func=lambda x: next(opt[1] for opt in model_options if opt[0] == x)
+)
+
+# 선택된 모델 정보 표시
+if selected_model_id in models:
+    model_info = models[selected_model_id]
+    st.info(f"**선택된 모델:** {model_info['name']}\n\n**설명:** {model_info['description']}")
+
+# 세션 상태 업데이트
+st.session_state.selected_model = selected_model_id
 
 # 파일 업로드
 uploaded_file = st.file_uploader("📤 번역할 .docx 파일을 업로드하세요", type=["docx"])
@@ -69,7 +99,7 @@ def run_translation():
 
     for i, chunk in enumerate(st.session_state.chunked_elements):
         if chunk["type"] == "TEXT":
-            translated = translate_text_with_gemini(chunk["content"])
+            translated = translate_text_with_gemini(chunk["content"], st.session_state.selected_model)
             for line in translated.split("\n"):
                 if line.strip():
                     # 제목은 단락 번호를 붙이지 않음 -> 제목이 아닌 line에 대해 단락 번호 추가
@@ -86,7 +116,7 @@ def run_translation():
                     doc.add_paragraph_with_justify("")
             chunk["translated"] = translated
         elif chunk["type"] == "FIGURE":
-            translated_pairs = translate_image_with_gemini(chunk["content"])
+            translated_pairs = translate_image_with_gemini(chunk["content"], st.session_state.selected_model)
             formatted = [f"{p.original}: {p.translated}" for p in translated_pairs]
             for line in formatted:
                 doc.add_paragraph_with_justify(line)
@@ -109,7 +139,9 @@ if uploaded_file and not st.session_state.translated:
 
 # 번역 완료 후 결과
 if st.session_state.translated:
-    st.success("✅ 번역이 완료되었습니다!")
+    # 사용된 모델 정보 표시
+    used_model_info = models.get(st.session_state.selected_model, {})
+    st.success(f"✅ 번역이 완료되었습니다! (사용 모델: {used_model_info.get('name', st.session_state.selected_model)})")
 
     download_filename = f"{st.session_state.base_filename}_translated_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
 

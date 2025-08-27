@@ -7,7 +7,7 @@ from google.genai.errors import ClientError
 from pydantic import BaseModel
 
 from utils.config import (
-    GEMINI_MODEL_NAME,
+    DEFAULT_GEMINI_MODEL_NAME,
     IMAGE_TRANSLATION_PROMPT,
     TEXT_TRANSLATION_PROMPT,
 )
@@ -66,10 +66,13 @@ def retry_with_delay(func, *args, max_retries=5, default_delay=10, **kwargs):
     )
 
 
-def translate_text_with_gemini(text: str) -> str:
+def translate_text_with_gemini(text: str, model_name: str = None) -> str:
+    if model_name is None:
+        model_name = DEFAULT_GEMINI_MODEL_NAME
+        
     def call_gemini_api():
         response = client.models.generate_content(
-            model=GEMINI_MODEL_NAME,
+            model=model_name,
             contents=[TEXT_TRANSLATION_PROMPT, text],
             config={
                 "response_mime_type": "application/json",
@@ -81,10 +84,13 @@ def translate_text_with_gemini(text: str) -> str:
     return retry_with_delay(call_gemini_api)
 
 
-def translate_image_with_gemini(pil_image) -> list[ImageTranslation]:
+def translate_image_with_gemini(pil_image, model_name: str = None) -> list[ImageTranslation]:
+    if model_name is None:
+        model_name = DEFAULT_GEMINI_MODEL_NAME
+        
     def call_gemini_api():
         response = client.models.generate_content(
-            model=GEMINI_MODEL_NAME,
+            model=model_name,
             contents=[IMAGE_TRANSLATION_PROMPT, pil_image],
             config={
                 "response_mime_type": "application/json",

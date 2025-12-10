@@ -164,4 +164,4 @@ if st.session_state.translated:
     # 번역 결과 표시
     with st.expander("📘 최종 번역 결과 (청크 단위)", expanded=False):
         df = pd.DataFrame(st.session_state.chunked_elements)
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df, width="stretch")

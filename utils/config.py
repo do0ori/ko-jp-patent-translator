@@ -1,6 +1,6 @@
 # Gemini API-related configurations
 # 모델은 동적으로 선택되므로 여기서는 기본값만 설정
-DEFAULT_GEMINI_MODEL_NAME = "gemini-2.5-flash"
+DEFAULT_GEMINI_MODEL_NAME = "gemini-2.0-flash"
 
 # Prompts for translation
 TEXT_TRANSLATION_PROMPT = (

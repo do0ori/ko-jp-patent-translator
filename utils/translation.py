@@ -66,10 +66,10 @@ def retry_with_delay(func, *args, max_retries=5, default_delay=10, **kwargs):
     )
 
 
-def translate_text_with_gemini(text: str, model_name: str = None) -> str:
-    if model_name is None:
-        model_name = DEFAULT_GEMINI_MODEL_NAME
-        
+def translate_text_with_gemini(
+    text: str,
+    model_name: str = DEFAULT_GEMINI_MODEL_NAME,
+) -> str:
     def call_gemini_api():
         response = client.models.generate_content(
             model=model_name,
@@ -84,10 +84,10 @@ def translate_text_with_gemini(text: str, model_name: str = None) -> str:
     return retry_with_delay(call_gemini_api)
 
 
-def translate_image_with_gemini(pil_image, model_name: str = None) -> list[ImageTranslation]:
-    if model_name is None:
-        model_name = DEFAULT_GEMINI_MODEL_NAME
-        
+def translate_image_with_gemini(
+    pil_image,
+    model_name: str = DEFAULT_GEMINI_MODEL_NAME,
+) -> list[ImageTranslation]:
     def call_gemini_api():
         response = client.models.generate_content(
             model=model_name,

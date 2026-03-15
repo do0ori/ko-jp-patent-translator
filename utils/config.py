@@ -2,6 +2,9 @@
 DEFAULT_GEMINI_MODEL_NAME = "gemini-2.5-flash"
 DEFAULT_GEMINI_MODEL_DISPLAY_NAME = "Gemini 2.5 Flash"
 
+# Parallel translation: max concurrent API requests (Tier 1 friendly)
+TRANSLATION_MAX_WORKERS = 8
+
 # Prompts for translation
 TEXT_TRANSLATION_PROMPT = (
     "You are a professional patent translator specializing in Korean-to-Japanese patents. "

@@ -1,7 +1,7 @@
 import logging
+import os
 import time
 
-import streamlit as st
 from google import genai
 from google.genai.errors import ClientError
 from pydantic import BaseModel
@@ -12,8 +12,23 @@ from utils.config import (
     TEXT_TRANSLATION_PROMPT,
 )
 
-# Gemini API 설정
-client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+# Gemini API client (lazy: supports Streamlit secrets or GEMINI_API_KEY env for benchmark)
+_client = None
+
+
+def _get_client():
+    global _client
+    if _client is not None:
+        return _client
+    try:
+        import streamlit as st
+        api_key = st.secrets["GEMINI_API_KEY"]
+    except Exception:
+        api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY not found in st.secrets or GEMINI_API_KEY env")
+    _client = genai.Client(api_key=api_key)
+    return _client
 
 
 # 구조화 모델
@@ -71,7 +86,7 @@ def translate_text_with_gemini(
     model_name: str = DEFAULT_GEMINI_MODEL_NAME,
 ) -> str:
     def call_gemini_api():
-        response = client.models.generate_content(
+        response = _get_client().models.generate_content(
             model=model_name,
             contents=[TEXT_TRANSLATION_PROMPT, text],
             config={
@@ -89,7 +104,7 @@ def translate_image_with_gemini(
     model_name: str = DEFAULT_GEMINI_MODEL_NAME,
 ) -> list[ImageTranslation]:
     def call_gemini_api():
-        response = client.models.generate_content(
+        response = _get_client().models.generate_content(
             model=model_name,
             contents=[IMAGE_TRANSLATION_PROMPT, pil_image],
             config={

@@ -11,9 +11,9 @@ from utils import (
     create_japanese_patent_docx,
     group_paragraphs_to_chunks,
     parse_docx_with_images,
-    translate_image_with_gemini,
-    translate_text_with_gemini,
+    translate_chunks_parallel,
 )
+from utils.config import TRANSLATION_MAX_WORKERS
 
 # 초기 상태
 if "translated" not in st.session_state:
@@ -69,24 +69,15 @@ if uploaded_file and not st.session_state.translated:
     st.session_state.chunked_elements = chunks
 
 
-# 번역 실행
-def run_translation():
-    doc = create_japanese_patent_docx()
-    total = len(st.session_state.chunked_elements)
+def build_doc_from_translated_chunks(doc, chunks):
+    """Write translated chunks (with chunk['translated'] set) into doc in order."""
     paragraph_counter = 0
-
-    progress_placeholder.progress(0, text=f"🔄 번역 중... 0 / {total} 청크 완료")
-
-    for i, chunk in enumerate(st.session_state.chunked_elements):
+    for chunk in chunks:
         if chunk["type"] == "TEXT":
-            translated = translate_text_with_gemini(
-                chunk["content"], DEFAULT_GEMINI_MODEL_NAME
-            )
+            translated = chunk["translated"]
             for line in translated.split("\n"):
                 if line.strip():
-                    # 제목은 단락 번호를 붙이지 않음 -> 제목이 아닌 line에 대해 단락 번호 추가
                     if not (line.startswith("【") and line.endswith("】")):
-                        # 첫 번째 단락은 특허 명칭에 대한 단락이므로 번호를 붙이지 않음
                         if paragraph_counter == 0:
                             paragraph_counter += 1
                         else:
@@ -96,19 +87,35 @@ def run_translation():
                     doc.add_paragraph_with_justify(" " + line)
                 else:
                     doc.add_paragraph_with_justify("")
-            chunk["translated"] = translated
         elif chunk["type"] == "FIGURE":
-            translated_pairs = translate_image_with_gemini(
-                chunk["content"], DEFAULT_GEMINI_MODEL_NAME
-            )
-            formatted = [f"{p.original}: {p.translated}" for p in translated_pairs]
+            formatted = [
+                f"{p.original}: {p.translated}" for p in chunk["translated"]
+            ]
             for line in formatted:
                 doc.add_paragraph_with_justify(line)
-            chunk["translated"] = formatted
 
+
+# 번역 실행
+def run_translation():
+    chunks = st.session_state.chunked_elements
+    total = len(chunks)
+    doc = create_japanese_patent_docx()
+
+    def progress_cb(completed, total_n):
         progress_placeholder.progress(
-            (i + 1) / total, text=f"🔄 번역 중... {i + 1} / {total} 청크 완료"
+            completed / total_n,
+            text=f"🔄 번역 중... {completed} / {total_n} 청크 완료",
         )
+
+    progress_placeholder.progress(0, text=f"🔄 번역 중... 0 / {total} 청크 완료")
+    translated_chunks = translate_chunks_parallel(
+        chunks,
+        model_name=DEFAULT_GEMINI_MODEL_NAME,
+        max_workers=TRANSLATION_MAX_WORKERS,
+        progress_callback=progress_cb,
+    )
+    st.session_state.chunked_elements = translated_chunks
+    build_doc_from_translated_chunks(doc, translated_chunks)
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp_file:
         doc.save(tmp_file.name)

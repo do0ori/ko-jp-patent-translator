@@ -29,7 +29,7 @@ flowchart TD
   D -->|모두 처리됨| A7
 ```
 
-※ 현재는 사전 사용 안하는 버전 & 비용 이슈로 무료인 Gemini api 사용
+※ Gemini API 유료 Tier 1 사용 중
 
 ## 실행
 
@@ -41,6 +41,17 @@ flowchart TD
     ```
     python -m streamlit run app.py
     ```
+
+## 벤치마크 (순차 vs 병렬)
+
+동일 문서로 순차/병렬 번역 소요 시간을 비교하려면:
+
+```bash
+export GEMINI_API_KEY="your_key"
+python scripts/benchmark_translation.py path/to/patent.docx
+```
+
+`--sequential-only` 또는 `--parallel-only` 로 한쪽만 실행할 수 있다. 결과에 순차 시간, 병렬 시간, speedup 배수가 출력된다.
 
 ## 참고자료
 

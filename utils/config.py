@@ -20,6 +20,7 @@ TEXT_TRANSLATION_PROMPT = (
     "6. Prefer standard Japanese patent terminology.\n"
     "7. Keep technical terms consistent throughout the document.\n"
     "8. Do NOT omit any content, even if repetitive.\n"
+    "9. Preserve all line breaks from the source text."
     "The goal is a structurally equivalent Japanese version suitable for human post-editing."
 )
 

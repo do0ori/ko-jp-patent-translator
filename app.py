@@ -60,8 +60,11 @@ else:
 
 # 파일 업로드 시 문서 파싱
 if uploaded_file and not st.session_state.translated:
+    progress_placeholder.progress(0, text="📄 문서 파싱 중...")
     elements = parse_docx_with_images(uploaded_file)
+    progress_placeholder.progress(0.5, text="📄 청크 구성 중...")
     chunks = group_paragraphs_to_chunks(elements)
+    progress_placeholder.progress(1.0, text="✅ 문서 분석 완료")
     st.session_state.parsed_elements = elements
     st.session_state.chunked_elements = chunks
 
@@ -71,6 +74,8 @@ def run_translation():
     doc = create_japanese_patent_docx()
     total = len(st.session_state.chunked_elements)
     paragraph_counter = 0
+
+    progress_placeholder.progress(0, text=f"🔄 번역 중... 0 / {total} 청크 완료")
 
     for i, chunk in enumerate(st.session_state.chunked_elements):
         if chunk["type"] == "TEXT":

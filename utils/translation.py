@@ -1,5 +1,6 @@
 import logging
 import os
+import threading
 import time
 
 from google import genai
@@ -12,23 +13,30 @@ from utils.config import (
     TEXT_TRANSLATION_PROMPT,
 )
 
-# Gemini API client (lazy: supports Streamlit secrets or GEMINI_API_KEY env for benchmark)
-_client = None
+# API key resolved once (main thread or first thread that needs it)
+_api_key = None
+_api_key_lock = threading.Lock()
+
+# One client per thread so worker threads don't share httpx client (avoids "client has been closed")
+_tls = threading.local()
 
 
 def _get_client():
-    global _client
-    if _client is not None:
-        return _client
-    try:
-        import streamlit as st
-        api_key = st.secrets["GEMINI_API_KEY"]
-    except Exception:
-        api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        raise RuntimeError("GEMINI_API_KEY not found in st.secrets or GEMINI_API_KEY env")
-    _client = genai.Client(api_key=api_key)
-    return _client
+    global _api_key
+    with _api_key_lock:
+        if _api_key is None:
+            try:
+                import streamlit as st
+                _api_key = st.secrets["GEMINI_API_KEY"]
+            except Exception:
+                _api_key = os.environ.get("GEMINI_API_KEY")
+            if not _api_key:
+                raise RuntimeError(
+                    "GEMINI_API_KEY not found in st.secrets or GEMINI_API_KEY env"
+                )
+    if not getattr(_tls, "client", None):
+        _tls.client = genai.Client(api_key=_api_key)
+    return _tls.client
 
 
 # 구조화 모델

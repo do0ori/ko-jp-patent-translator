@@ -2,6 +2,9 @@
 DEFAULT_GEMINI_MODEL_NAME = "gemini-2.5-flash"
 DEFAULT_GEMINI_MODEL_DISPLAY_NAME = "Gemini 2.5 Flash"
 
+# Parallel translation: max concurrent API requests (Tier 1 friendly)
+TRANSLATION_MAX_WORKERS = 8
+
 # Prompts for translation
 TEXT_TRANSLATION_PROMPT = (
     "You are a professional patent translator specializing in Korean-to-Japanese patents. "
@@ -17,6 +20,7 @@ TEXT_TRANSLATION_PROMPT = (
     "6. Prefer standard Japanese patent terminology.\n"
     "7. Keep technical terms consistent throughout the document.\n"
     "8. Do NOT omit any content, even if repetitive.\n"
+    "9. Preserve all line breaks from the source text."
     "The goal is a structurally equivalent Japanese version suitable for human post-editing."
 )
 

@@ -5,19 +5,19 @@
 한국어 특허 `.docx` 문서를 업로드하면,  
 **일본어 특허 문체에 맞춰 번역된 `.docx` 파일**을 다운로드할 수 있는 번역 서비스입니다.
 
--   입력: `.docx` 특허 문서
--   출력: 일본어 특허 문체의 `.docx`
--   텍스트와 도면(이미지 내 텍스트)을 모두 처리
+- 입력: `.docx` 특허 문서
+- 출력: 일본어 특허 문체의 `.docx`
+- 텍스트와 도면(이미지 내 텍스트)을 모두 처리
 
 ---
 
 ## ✨ Highlights
 
--   `.docx` 문서를 요소 단위(텍스트 / 도면)로 파싱
--   텍스트는 문장 구조를 최대한 유지하며 chunk 단위로 번역
--   도면 이미지는 OCR성 텍스트 추출 + `[원문 - 번역]` 형식 생성
--   출력 문서는 **MS Mincho 10.5pt** 기준으로 생성
--   **병렬 처리 기반 pipeline**으로 전체 번역 시간 단축
+- `.docx` 문서를 요소 단위(텍스트 / 도면)로 파싱
+- 텍스트는 문장 구조를 최대한 유지하며 chunk 단위로 번역
+- 도면 이미지는 OCR성 텍스트 추출 + `[원문 - 번역]` 형식 생성
+- 출력 문서는 **MS Mincho 10.5pt** 기준으로 생성
+- **병렬 처리 기반 pipeline**으로 전체 번역 시간 단축
 
 ---
 
@@ -51,13 +51,13 @@ flowchart TD
 
   subgraph P["Parallel Processing"]
     direction TB
-    PT["텍스트 chunk 병렬 번역"]
-    PI["도면 OCR/텍스트 병렬 처리"]
+    PT["AI로 원문 텍스트 번역"]
+    PI["AI로 도면 텍스트에 대해<br>[원문 - 번역] 생성"]
   end
 
   M["원래 순서 기준 결과 병합"]
   W["출력용 .docx에 결과 반영"]
-  Z["[Streamlit]]<br/>번역된 .docx 다운로드"]
+  Z["[Streamlit]]<br/>번역된 .docx 파일 다운로드"]
 
   A --> B --> C --> D --> E
   E -->|텍스트| T --> PT --> M
@@ -69,22 +69,22 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  A1["[Streamlit]<br>번역할 파일 업로드 (.docx)"]
-  A2["**문서 순차 파싱**<br><div style='white-space:nowrap'>[(텍스트), (도면), ...] 리스트화</div>"]
-  A3["**텍스트 chunk 분할**<br>(문장 단위 유지)"]
-  A4["**출력용 .docx 초기화**<br>(MS Mincho 10.5pt)"]
+  A1["[Streamlit]<br>번역할 .docx 파일 업로드"]
+  A2["문서 순차 파싱<br><div style='white-space:nowrap'>[(텍스트), (도면), ...] 리스트화</div>"]
+  A3["텍스트 chunk 분할<br>(문장 단위 유지)"]
+  A4["출력용 .docx 초기화<br>(MS Mincho 10.5pt)"]
 
-  subgraph LOOP["요소별 반복 처리"]
+  subgraph LOOP["Sequential Processing<br>(요소별 반복 처리)"]
     direction TB
-    D{"요소 타입?"}
+    D{"요소 타입 분기"}
     T["AI로 원문 번역"]
-    I["AI로 이미지 내 text에 대해 *[원문 - 번역]* 생성"]
+    I["AI로 도면 텍스트에 대해<br>[원문 - 번역] 생성"]
     D -->|텍스트| T --> E
     D -->|도면| I --> E
   end
 
   E["<div style='white-space:nowrap'>출력용 .docx 파일에 결과 누적</div>"]
-  A7["[Streamlit]<br>번역된 .docx 다운로드"]
+  A7["[Streamlit]<br>번역된 .docx 파일 다운로드"]
 
   %% 흐름
   A1 -->|번역하기| A2 --> A3 --> A4 --> LOOP
@@ -94,8 +94,8 @@ flowchart TD
 
 > [!NOTE]
 >
-> -   Gemini API 유료 Tier 1 사용 중
-> -   AI 번역의 품질 한계로 인해 검수를 통한 후편집 필요
+> - Gemini API 유료 Tier 1 사용 중
+> - AI 번역의 품질 한계로 인해 검수를 통한 후편집 필요
 
 ---
 
@@ -110,9 +110,9 @@ python scripts/benchmark_translation.py path/to/patent.docx
 
 옵션:
 
--   `--sequential-only`
--   `--parallel-only`
-    실행 결과에는 순차 시간, 병렬 시간, speedup 배수가 출력됩니다.
+- `--sequential-only`
+- `--parallel-only`
+  실행 결과에는 순차 시간, 병렬 시간, speedup 배수가 출력됩니다.
 
 ### Result (25 청크 특허 문서)
 

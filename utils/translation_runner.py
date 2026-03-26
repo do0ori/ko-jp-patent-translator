@@ -1,22 +1,33 @@
 """Run translation over chunks: sequential (benchmark only) and parallel (app)."""
 
+import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from utils.config import DEFAULT_GEMINI_MODEL_NAME
 from utils.translation import translate_image_with_gemini, translate_text_with_gemini
 
+log = logging.getLogger(__name__)
+
 
 def _translate_single_chunk(chunk: dict, model_name: str) -> dict:
-    """Translate one chunk in-place (sets chunk['translated']) and return the same chunk."""
+    """Translate one chunk (sets chunk['translated']) and return it.
+
+    TEXT chunks: content is list[str], translated becomes list[str] of same length.
+    FIGURE chunks: content is PIL image, translated becomes list[ImageTranslation].
+    """
     if chunk["type"] == "TEXT":
-        chunk["translated"] = translate_text_with_gemini(
-            chunk["content"], model_name
+        paragraphs: list[str] = chunk["content"]
+        translated = translate_text_with_gemini(paragraphs, model_name)
+        log.info(
+            "TEXT chunk translated: %d paragraphs in -> %d out",
+            len(paragraphs),
+            len(translated),
         )
+        chunk["translated"] = translated
     elif chunk["type"] == "FIGURE":
-        translated_pairs = translate_image_with_gemini(
+        chunk["translated"] = translate_image_with_gemini(
             chunk["content"], model_name
         )
-        chunk["translated"] = translated_pairs
     return chunk
 
 

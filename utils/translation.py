@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import threading
@@ -27,6 +28,7 @@ def _get_client():
         if _api_key is None:
             try:
                 import streamlit as st
+
                 _api_key = st.secrets["GEMINI_API_KEY"]
             except Exception:
                 _api_key = os.environ.get("GEMINI_API_KEY")
@@ -40,10 +42,6 @@ def _get_client():
 
 
 # 구조화 모델
-class TranslationResult(BaseModel):
-    translated_text: str
-
-
 class ImageTranslation(BaseModel):
     original: str
     translated: str
@@ -55,6 +53,10 @@ logging.basicConfig(
 )
 
 
+class ParagraphMismatchError(Exception):
+    """Raised when the translated paragraph count doesn't match the source."""
+
+
 def retry_with_delay(func, *args, max_retries=5, default_delay=10, **kwargs):
     for attempt in range(max_retries):
         try:
@@ -62,6 +64,10 @@ def retry_with_delay(func, *args, max_retries=5, default_delay=10, **kwargs):
                 f"Attempt {attempt + 1}/{max_retries} for function {func.__name__}"
             )
             return func(*args, **kwargs)
+        except ParagraphMismatchError as e:
+            logging.warning(
+                f"Paragraph count mismatch (attempt {attempt + 1}): {e}. Retrying..."
+            )
         except ClientError as e:
             if e.code == 429 and e.status == "RESOURCE_EXHAUSTED":
                 retry_delay = default_delay
@@ -90,19 +96,28 @@ def retry_with_delay(func, *args, max_retries=5, default_delay=10, **kwargs):
 
 
 def translate_text_with_gemini(
-    text: str,
+    paragraphs: list[str],
     model_name: str = DEFAULT_GEMINI_MODEL_NAME,
-) -> str:
+) -> list[str]:
+    """Translate a list of paragraphs, returning a list of the same length."""
+    expected_len = len(paragraphs)
+    input_json = json.dumps(paragraphs, ensure_ascii=False)
+
     def call_gemini_api():
         response = _get_client().models.generate_content(
             model=model_name,
-            contents=[TEXT_TRANSLATION_PROMPT, text],
+            contents=[TEXT_TRANSLATION_PROMPT, input_json],
             config={
                 "response_mime_type": "application/json",
-                "response_schema": TranslationResult,
+                "response_schema": list[str],
             },
         )
-        return response.parsed.translated_text
+        result: list[str] = response.parsed
+        if len(result) != expected_len:
+            raise ParagraphMismatchError(
+                f"Expected {expected_len} paragraphs but got {len(result)}"
+            )
+        return result
 
     return retry_with_delay(call_gemini_api)
 

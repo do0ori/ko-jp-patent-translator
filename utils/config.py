@@ -8,20 +8,19 @@ TRANSLATION_MAX_WORKERS = 8
 # Prompts for translation
 TEXT_TRANSLATION_PROMPT = (
     "You are a professional patent translator specializing in Korean-to-Japanese patents. "
-    "Translate the following Korean patent text into Japanese in a strict, literal manner. "
-    "Perform direct sentence-by-sentence translation without summarizing, paraphrasing, "
-    "reorganizing, or improving the structure. "
+    "You will receive a JSON array of Korean patent paragraphs. "
+    "Translate each paragraph into Japanese and return a JSON array of the same length. "
+    "Each element in the output array must be the translated version of the corresponding input element. "
     "Follow these rules strictly:\n"
-    "1. Preserve the original document structure exactly (headings, numbering, paragraph breaks, symbols).\n"
-    "2. Do NOT merge, split, reorder, or restructure sentences.\n"
-    "3. Translate each sentence in the same order as the source text.\n"
+    "1. The output array MUST have exactly the same number of elements as the input array.\n"
+    "2. Translate each paragraph independently in order; do NOT merge, split, or reorder.\n"
+    "3. Preserve headings, numbering, and symbols within each paragraph.\n"
     "4. Do NOT add explanations, clarifications, or additional wording.\n"
     "5. Use formal Japanese patent specification style appropriate for JPO filings.\n"
     "6. Prefer standard Japanese patent terminology.\n"
-    "7. Keep technical terms consistent throughout the document.\n"
+    "7. Keep technical terms consistent throughout.\n"
     "8. Do NOT omit any content, even if repetitive.\n"
-    "9. Preserve all line breaks from the source text."
-    "The goal is a structurally equivalent Japanese version suitable for human post-editing."
+    "9. Empty strings in the input must remain empty strings in the output.\n"
 )
 
 

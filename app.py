@@ -60,11 +60,8 @@ else:
 
 # 파일 업로드 시 문서 파싱
 if uploaded_file and not st.session_state.translated:
-    progress_placeholder.progress(0, text="📄 문서 파싱 중...")
     elements = parse_docx_with_images(uploaded_file)
-    progress_placeholder.progress(0.5, text="📄 청크 구성 중...")
     chunks = group_paragraphs_to_chunks(elements)
-    progress_placeholder.progress(1.0, text="✅ 문서 분석 완료")
     st.session_state.parsed_elements = elements
     st.session_state.chunked_elements = chunks
 
@@ -74,25 +71,21 @@ def build_doc_from_translated_chunks(doc, chunks):
     paragraph_counter = 0
     for chunk in chunks:
         if chunk["type"] == "TEXT":
-            translated = chunk["translated"]
-            for line in translated.split("\n"):
-                if line.strip():
-                    if not (line.startswith("【") and line.endswith("】")):
+            for para in chunk["translated"]:
+                if para.strip():
+                    if not (para.startswith("【") and para.endswith("】")):
                         if paragraph_counter == 0:
                             paragraph_counter += 1
                         else:
                             paragraph_number = f" 【{paragraph_counter:04d}】"
                             paragraph_counter += 1
                             doc.add_paragraph_with_justify(" " + paragraph_number)
-                    doc.add_paragraph_with_justify(" " + line)
+                    doc.add_paragraph_with_justify(" " + para)
                 else:
                     doc.add_paragraph_with_justify("")
         elif chunk["type"] == "FIGURE":
-            formatted = [
-                f"{p.original}: {p.translated}" for p in chunk["translated"]
-            ]
-            for line in formatted:
-                doc.add_paragraph_with_justify(line)
+            for p in chunk["translated"]:
+                doc.add_paragraph_with_justify(f"{p.original}: {p.translated}")
 
 
 # 번역 실행
@@ -144,5 +137,14 @@ if st.session_state.translated:
 
     # 번역 결과 표시
     with st.expander("📘 최종 번역 결과 (청크 단위)", expanded=False):
-        df = pd.DataFrame(st.session_state.chunked_elements)
-        st.dataframe(df, width="stretch")
+        display_rows = []
+        for c in st.session_state.chunked_elements:
+            row = {"type": c["type"]}
+            if c["type"] == "TEXT":
+                row["content"] = "\n".join(c["content"])
+                row["translated"] = "\n".join(c.get("translated", []))
+            elif c["type"] == "FIGURE":
+                row["content"] = "(image)"
+                row["translated"] = str(c.get("translated", ""))
+            display_rows.append(row)
+        st.dataframe(pd.DataFrame(display_rows), use_container_width=True)

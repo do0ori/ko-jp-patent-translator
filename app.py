@@ -147,4 +147,4 @@ if st.session_state.translated:
                 row["content"] = "(image)"
                 row["translated"] = str(c.get("translated", ""))
             display_rows.append(row)
-        st.dataframe(pd.DataFrame(display_rows), use_container_width=True)
+        st.dataframe(pd.DataFrame(display_rows), width="stretch")

@@ -57,6 +57,31 @@ class ParagraphMismatchError(Exception):
     """Raised when the translated paragraph count doesn't match the source."""
 
 
+def _translate_text_batch_with_retry(
+    paragraphs: list[str], model_name: str, max_retries: int
+) -> list[str]:
+    expected_len = len(paragraphs)
+    input_json = json.dumps(paragraphs, ensure_ascii=False)
+
+    def call_gemini_api():
+        response = _get_client().models.generate_content(
+            model=model_name,
+            contents=[TEXT_TRANSLATION_PROMPT, input_json],
+            config={
+                "response_mime_type": "application/json",
+                "response_schema": list[str],
+            },
+        )
+        result: list[str] = response.parsed
+        if len(result) != expected_len:
+            raise ParagraphMismatchError(
+                f"Expected {expected_len} paragraphs but got {len(result)}"
+            )
+        return result
+
+    return retry_with_delay(call_gemini_api, max_retries=max_retries)
+
+
 def retry_with_delay(func, *args, max_retries=5, default_delay=10, **kwargs):
     for attempt in range(max_retries):
         try:
@@ -99,27 +124,33 @@ def translate_text_with_gemini(
     paragraphs: list[str],
     model_name: str = DEFAULT_GEMINI_MODEL_NAME,
 ) -> list[str]:
-    """Translate a list of paragraphs, returning a list of the same length."""
-    expected_len = len(paragraphs)
-    input_json = json.dumps(paragraphs, ensure_ascii=False)
+    """Translate a list of paragraphs, returning a list of the same length.
 
-    def call_gemini_api():
-        response = _get_client().models.generate_content(
-            model=model_name,
-            contents=[TEXT_TRANSLATION_PROMPT, input_json],
-            config={
-                "response_mime_type": "application/json",
-                "response_schema": list[str],
-            },
+    If a large chunk keeps failing with paragraph-count mismatch, split it into
+    smaller batches and retry recursively so one bad chunk does not stall the
+    whole translation run for too long.
+    """
+    if not paragraphs:
+        return []
+
+    max_retries = 3 if len(paragraphs) >= 80 else 5
+    try:
+        return _translate_text_batch_with_retry(
+            paragraphs, model_name=model_name, max_retries=max_retries
         )
-        result: list[str] = response.parsed
-        if len(result) != expected_len:
-            raise ParagraphMismatchError(
-                f"Expected {expected_len} paragraphs but got {len(result)}"
-            )
-        return result
-
-    return retry_with_delay(call_gemini_api)
+    except RuntimeError:
+        if len(paragraphs) <= 1:
+            raise
+        mid = len(paragraphs) // 2
+        logging.warning(
+            "Falling back to split translation for %d paragraphs (%d + %d).",
+            len(paragraphs),
+            mid,
+            len(paragraphs) - mid,
+        )
+        left = translate_text_with_gemini(paragraphs[:mid], model_name=model_name)
+        right = translate_text_with_gemini(paragraphs[mid:], model_name=model_name)
+        return left + right
 
 
 def translate_image_with_gemini(

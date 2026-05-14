@@ -115,7 +115,6 @@ class SheetsSink:
                     values,
                     value_input_option="USER_ENTERED",
                     insert_data_option="INSERT_ROWS",
-                    table_range=f"{RUNS_TAB}!A1",
                 )
                 return self._parse_appended_row_index(resp)
             except Exception:
@@ -139,7 +138,6 @@ class SheetsSink:
                         values,
                         value_input_option="USER_ENTERED",
                         insert_data_option="INSERT_ROWS",
-                        table_range=f"{RUNS_TAB}!A1",
                     )
                     return True
                 except Exception:
@@ -149,7 +147,11 @@ class SheetsSink:
             try:
                 values = _row_values(asdict(row), _RUN_COLUMNS)
                 end_col = _col_letter(len(_RUN_COLUMNS))
-                rng = f"{RUNS_TAB}!A{row_idx}:{end_col}{row_idx}"
+                # Range without sheet prefix — gspread resolves against
+                # the bound worksheet; including the prefix risks the
+                # same double-prefix bug seen with append_row's
+                # table_range arg.
+                rng = f"A{row_idx}:{end_col}{row_idx}"
                 self._runs_ws.update(
                     rng, [values], value_input_option="USER_ENTERED"
                 )
@@ -170,7 +172,6 @@ class SheetsSink:
                     payload,
                     value_input_option="USER_ENTERED",
                     insert_data_option="INSERT_ROWS",
-                    table_range=f"{SAMPLES_TAB}!A1",
                 )
             except Exception:
                 log.exception(

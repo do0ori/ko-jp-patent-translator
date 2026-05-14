@@ -5,6 +5,17 @@ DEFAULT_GEMINI_MODEL_DISPLAY_NAME = "Gemini 2.5 Flash"
 # Parallel translation: max concurrent API requests (Tier 1 friendly)
 TRANSLATION_MAX_WORKERS = 8
 
+# Metrics → Google Sheets sink. Off by default; flip via env METRICS_ENABLED=1
+# or st.secrets["metrics_enabled"] (handled in utils/metrics.py).
+METRICS_ENABLED_ENV_VAR = "METRICS_ENABLED"
+METRICS_SAMPLE_INTERVAL_S = 1.5
+METRICS_FLUSH_INTERVAL_S = 30.0
+METRICS_FLUSH_BATCH_SIZE = 30
+METRICS_MAX_BUFFER_ROWS = 2000
+METRICS_SINK_IO_LOCK_TIMEOUT_S = 3.0
+METRICS_THREAD_JOIN_TIMEOUT_S = 1.0
+METRICS_ERROR_SHORT_MAX_LEN = 500
+
 # Prompts for translation
 TEXT_TRANSLATION_PROMPT = (
     "You are a professional patent translator specializing in Korean-to-Japanese patents. "

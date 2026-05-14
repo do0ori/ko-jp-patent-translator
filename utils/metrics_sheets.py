@@ -101,7 +101,12 @@ class SheetsSink:
 
     def __init__(self, spreadsheet) -> None:
         self._ss = spreadsheet
-        self.io_lock = threading.Lock()
+        # RLock (not Lock) because MetricsCollector.stop_and_finalize
+        # acquires this lock and then calls sink methods (append_samples /
+        # update_run / append_run), which each re-acquire it via
+        # `with self.io_lock`. A non-reentrant Lock deadlocks on that
+        # nested acquire from the same thread.
+        self.io_lock = threading.RLock()
         self._runs_ws = self._ensure_worksheet(RUNS_TAB, _RUN_COLUMNS)
         self._samples_ws = self._ensure_worksheet(SAMPLES_TAB, _SAMPLE_COLUMNS)
 

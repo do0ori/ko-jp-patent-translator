@@ -18,10 +18,17 @@ from utils import metrics as M
 
 
 class FakeSink:
-    """In-process sink with optional one-shot failure injection."""
+    """In-process sink with optional one-shot failure injection.
+
+    Uses RLock and acquires it inside every method to mirror the real
+    SheetsSink's locking discipline — the collector's stop_and_finalize
+    acquires the same lock before calling these methods, so a
+    non-reentrant Lock would deadlock here (this is exactly the bug we
+    hit on the first live run).
+    """
 
     def __init__(self, fail_once: set[str] | None = None) -> None:
-        self.io_lock = threading.Lock()
+        self.io_lock = threading.RLock()
         self.runs_appended: list[M.RunRow] = []
         self.runs_updated: list[tuple[Any, M.RunRow]] = []
         self.samples_batches: list[list[M.SampleRow]] = []
@@ -33,18 +40,21 @@ class FakeSink:
             raise RuntimeError(f"synthetic-{key}")
 
     def append_run(self, row: M.RunRow) -> Any:
-        self._maybe_fail("append_run")
-        self.runs_appended.append(row)
-        return len(self.runs_appended)  # row handle = 1-indexed insertion order
+        with self.io_lock:
+            self._maybe_fail("append_run")
+            self.runs_appended.append(row)
+            return len(self.runs_appended)  # 1-indexed insertion order
 
     def update_run(self, handle: Any, row: M.RunRow) -> bool:
-        self._maybe_fail("update_run")
-        self.runs_updated.append((handle, row))
-        return True
+        with self.io_lock:
+            self._maybe_fail("update_run")
+            self.runs_updated.append((handle, row))
+            return True
 
     def append_samples(self, rows: list[M.SampleRow]) -> None:
-        self._maybe_fail("append_samples")
-        self.samples_batches.append(list(rows))
+        with self.io_lock:
+            self._maybe_fail("append_samples")
+            self.samples_batches.append(list(rows))
 
 
 class TestCounters(unittest.TestCase):

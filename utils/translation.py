@@ -13,6 +13,7 @@ from utils.config import (
     IMAGE_TRANSLATION_PROMPT,
     TEXT_TRANSLATION_PROMPT,
 )
+from utils.metrics import MetricsCollector, NullMetricsCollector
 
 # API key resolved once (main thread or first thread that needs it)
 _api_key = None
@@ -58,12 +59,16 @@ class ParagraphMismatchError(Exception):
 
 
 def _translate_text_batch_with_retry(
-    paragraphs: list[str], model_name: str, max_retries: int
+    paragraphs: list[str],
+    model_name: str,
+    max_retries: int,
+    metrics: MetricsCollector | NullMetricsCollector,
 ) -> list[str]:
     expected_len = len(paragraphs)
     input_json = json.dumps(paragraphs, ensure_ascii=False)
 
     def call_gemini_api():
+        metrics.incr("n_text_api_calls")
         response = _get_client().models.generate_content(
             model=model_name,
             contents=[TEXT_TRANSLATION_PROMPT, input_json],
@@ -79,22 +84,35 @@ def _translate_text_batch_with_retry(
             )
         return result
 
-    return retry_with_delay(call_gemini_api, max_retries=max_retries)
+    return retry_with_delay(call_gemini_api, max_retries=max_retries, metrics=metrics)
 
 
-def retry_with_delay(func, *args, max_retries=5, default_delay=10, **kwargs):
+def retry_with_delay(
+    func,
+    *args,
+    metrics: MetricsCollector | NullMetricsCollector | None = None,
+    max_retries=5,
+    default_delay=10,
+    **kwargs,
+):
+    metrics = metrics or NullMetricsCollector()
     for attempt in range(max_retries):
+        is_last = attempt == max_retries - 1
         try:
             logging.info(
                 f"Attempt {attempt + 1}/{max_retries} for function {func.__name__}"
             )
             return func(*args, **kwargs)
         except ParagraphMismatchError as e:
+            metrics.incr("n_mismatch_errors")
             logging.warning(
                 f"Paragraph count mismatch (attempt {attempt + 1}): {e}. Retrying..."
             )
+            if not is_last:
+                metrics.incr("n_mismatch_retries")
         except ClientError as e:
             if e.code == 429 and e.status == "RESOURCE_EXHAUSTED":
+                metrics.incr("n_429_errors")
                 retry_delay = default_delay
                 try:
                     retry_info = next(
@@ -109,6 +127,8 @@ def retry_with_delay(func, *args, max_retries=5, default_delay=10, **kwargs):
                     )
                 logging.warning(f"RESOURCE_EXHAUSTED. Retrying in {retry_delay}s...")
                 time.sleep(retry_delay)
+                if not is_last:
+                    metrics.incr("n_429_retries")
             else:
                 logging.error(f"Unexpected ClientError: {e}")
                 raise e
@@ -123,6 +143,7 @@ def retry_with_delay(func, *args, max_retries=5, default_delay=10, **kwargs):
 def translate_text_with_gemini(
     paragraphs: list[str],
     model_name: str = DEFAULT_GEMINI_MODEL_NAME,
+    metrics: MetricsCollector | NullMetricsCollector | None = None,
 ) -> list[str]:
     """Translate a list of paragraphs, returning a list of the same length.
 
@@ -133,14 +154,19 @@ def translate_text_with_gemini(
     if not paragraphs:
         return []
 
+    metrics = metrics or NullMetricsCollector()
     max_retries = 3 if len(paragraphs) >= 80 else 5
     try:
         return _translate_text_batch_with_retry(
-            paragraphs, model_name=model_name, max_retries=max_retries
+            paragraphs,
+            model_name=model_name,
+            max_retries=max_retries,
+            metrics=metrics,
         )
     except RuntimeError:
         if len(paragraphs) <= 1:
             raise
+        metrics.incr("n_split_fallbacks")
         mid = len(paragraphs) // 2
         logging.warning(
             "Falling back to split translation for %d paragraphs (%d + %d).",
@@ -148,16 +174,27 @@ def translate_text_with_gemini(
             mid,
             len(paragraphs) - mid,
         )
-        left = translate_text_with_gemini(paragraphs[:mid], model_name=model_name)
-        right = translate_text_with_gemini(paragraphs[mid:], model_name=model_name)
+        # Recursive halves MUST receive the same metrics — otherwise all
+        # downstream api_call / 429 / mismatch counts from the split would
+        # be silently dropped.
+        left = translate_text_with_gemini(
+            paragraphs[:mid], model_name=model_name, metrics=metrics
+        )
+        right = translate_text_with_gemini(
+            paragraphs[mid:], model_name=model_name, metrics=metrics
+        )
         return left + right
 
 
 def translate_image_with_gemini(
     pil_image,
     model_name: str = DEFAULT_GEMINI_MODEL_NAME,
+    metrics: MetricsCollector | NullMetricsCollector | None = None,
 ) -> list[ImageTranslation]:
+    metrics = metrics or NullMetricsCollector()
+
     def call_gemini_api():
+        metrics.incr("n_image_api_calls")
         response = _get_client().models.generate_content(
             model=model_name,
             contents=[IMAGE_TRANSLATION_PROMPT, pil_image],
@@ -168,4 +205,4 @@ def translate_image_with_gemini(
         )
         return response.parsed
 
-    return retry_with_delay(call_gemini_api)
+    return retry_with_delay(call_gemini_api, metrics=metrics)

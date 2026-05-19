@@ -1,3 +1,5 @@
+import logging
+import os
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -13,7 +15,20 @@ from utils import (
     parse_docx_with_images,
     translate_chunks_parallel,
 )
-from utils.config import TRANSLATION_MAX_WORKERS
+from utils.config import METRICS_ENABLED_ENV_VAR, TRANSLATION_MAX_WORKERS
+from utils.metrics import (
+    PHASE_BUILDING_DOC,
+    PHASE_TRANSLATING,
+    STATUS_ERROR,
+    STATUS_OK,
+    MetricsCollector,
+    NullMetricsCollector,
+    NullSink,
+    set_active_collector,
+)
+from utils.metrics_sheets import build_sheets_sink_from_secrets
+
+log = logging.getLogger(__name__)
 
 # 초기 상태
 if "translated" not in st.session_state:
@@ -34,6 +49,20 @@ st.markdown(
 st.markdown(
     f":material/smart_toy: AI 모델: :blue-badge[{DEFAULT_GEMINI_MODEL_DISPLAY_NAME}]"
 )
+
+def _resolve_workers() -> int:
+    """Hidden tuning knob via ?workers=N query param; falls back to default."""
+    raw = st.query_params.get("workers")
+    if raw is None:
+        return TRANSLATION_MAX_WORKERS
+    try:
+        n = int(raw)
+    except (ValueError, TypeError):
+        return TRANSLATION_MAX_WORKERS
+    return max(1, min(n, 32))
+
+
+workers = _resolve_workers()
 
 # 파일 업로드
 uploaded_file = st.file_uploader("📤 번역할 .docx 파일을 업로드하세요", type=["docx"])
@@ -88,8 +117,79 @@ def build_doc_from_translated_chunks(doc, chunks):
                 doc.add_paragraph_with_justify(f"{p.original}: {p.translated}")
 
 
+def _metrics_enabled() -> bool:
+    """Env var first, then st.secrets — both falsy by default."""
+    env = os.environ.get(METRICS_ENABLED_ENV_VAR, "").strip().lower()
+    if env in ("1", "true", "yes", "on"):
+        return True
+    if env in ("0", "false", "no", "off"):
+        return False
+    try:
+        return bool(st.secrets.get("metrics_enabled", False))
+    except Exception:
+        return False
+
+
+def _build_collector(uploaded_file, chunks, workers):
+    """Instantiate a real collector when secrets/flag align; Null otherwise.
+
+    The collector itself is harmless to construct (no IO until start()),
+    but we still short-circuit to NullMetricsCollector when disabled so
+    the sampler/flusher threads aren't spun up for nothing.
+    """
+    if not _metrics_enabled():
+        return NullMetricsCollector()
+    sink = build_sheets_sink_from_secrets()
+    if sink is None:
+        log.info("[metrics] sheets sink unavailable; using NullSink locally")
+        sink = NullSink()
+    collector = MetricsCollector(sink)
+
+    text_chunks = [c for c in chunks if c["type"] == "TEXT"]
+    figure_chunks = [c for c in chunks if c["type"] == "FIGURE"]
+    chunk_sizes = [len(c["content"]) for c in text_chunks]
+    total_input_chars = sum(
+        len(p) for c in text_chunks for p in c["content"]
+    )
+
+    file_size = 0
+    doc_name = ""
+    if uploaded_file is not None:
+        doc_name = getattr(uploaded_file, "name", "") or ""
+        size = getattr(uploaded_file, "size", None)
+        if isinstance(size, int):
+            file_size = size
+
+    collector.record(
+        doc_name=doc_name,
+        file_size_bytes=file_size,
+        n_chunks=len(chunks),
+        n_text_chunks=len(text_chunks),
+        n_figure_chunks=len(figure_chunks),
+        n_paragraphs=sum(chunk_sizes),
+        n_images=len(figure_chunks),
+        chunk_size_max=max(chunk_sizes) if chunk_sizes else 0,
+        chunk_size_avg=(sum(chunk_sizes) / len(chunk_sizes)) if chunk_sizes else 0.0,
+        total_input_chars=total_input_chars,
+        workers=workers,
+        model_name=DEFAULT_GEMINI_MODEL_NAME,
+    )
+    return collector
+
+
+def _count_output_chars(translated_chunks):
+    total = 0
+    for c in translated_chunks:
+        if c["type"] == "TEXT":
+            total += sum(len(p) for p in c.get("translated", []) or [])
+        elif c["type"] == "FIGURE":
+            for item in c.get("translated", []) or []:
+                total += len(getattr(item, "translated", "") or "")
+    return total
+
+
 # 번역 실행
-def run_translation():
+def run_translation(workers: int):
     chunks = st.session_state.chunked_elements
     total = len(chunks)
     doc = create_japanese_patent_docx()
@@ -100,26 +200,46 @@ def run_translation():
             text=f"🔄 번역 중... {completed} / {total_n} 청크 완료",
         )
 
-    progress_placeholder.progress(0, text=f"🔄 번역 중... 0 / {total} 청크 완료")
-    translated_chunks = translate_chunks_parallel(
-        chunks,
-        model_name=DEFAULT_GEMINI_MODEL_NAME,
-        max_workers=TRANSLATION_MAX_WORKERS,
-        progress_callback=progress_cb,
-    )
-    st.session_state.chunked_elements = translated_chunks
-    build_doc_from_translated_chunks(doc, translated_chunks)
+    collector = _build_collector(uploaded_file, chunks, workers)
+    set_active_collector(collector)
+    collector.start(initial_phase=PHASE_TRANSLATING)
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp_file:
-        doc.save(tmp_file.name)
-        st.session_state.output_path = tmp_file.name
+    status = STATUS_ERROR
+    error: BaseException | None = None
+    try:
+        progress_placeholder.progress(0, text=f"🔄 번역 중... 0 / {total} 청크 완료")
+        translated_chunks = translate_chunks_parallel(
+            chunks,
+            model_name=DEFAULT_GEMINI_MODEL_NAME,
+            max_workers=workers,
+            progress_callback=progress_cb,
+            metrics_collector=collector,
+        )
+        st.session_state.chunked_elements = translated_chunks
 
-    st.session_state.translated = True
+        collector.set_phase(PHASE_BUILDING_DOC)
+        build_doc_from_translated_chunks(doc, translated_chunks)
+        collector.record(total_output_chars=_count_output_chars(translated_chunks))
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp_file:
+            doc.save(tmp_file.name)
+            st.session_state.output_path = tmp_file.name
+
+        st.session_state.translated = True
+        status = STATUS_OK
+    except BaseException as e:
+        error = e
+        raise
+    finally:
+        try:
+            collector.stop_and_finalize(status, error=error)
+        except Exception:
+            log.exception("[metrics] stop_and_finalize raised; ignoring")
 
 
 # 번역 시작 버튼
 if uploaded_file and not st.session_state.translated:
-    st.button("🚀 번역 시작", on_click=run_translation)
+    st.button("🚀 번역 시작", on_click=run_translation, args=(workers,))
 
 # 번역 완료 후 결과
 if st.session_state.translated:

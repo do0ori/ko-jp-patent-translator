@@ -174,4 +174,5 @@ cython_debug/
 .pypirc
 
 # streamlit configuration folder
-.streamlit/
+.streamlit/*
+!.streamlit/secrets.example.toml

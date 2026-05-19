@@ -4,3 +4,6 @@ python-docx
 pillow
 google-genai
 pydantic
+psutil
+gspread
+google-auth

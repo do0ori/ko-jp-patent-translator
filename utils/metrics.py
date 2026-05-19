@@ -284,10 +284,13 @@ class MetricsCollector:
 
     # ----- public API -----
 
-    def start(self) -> None:
+    def start(self, initial_phase: str = "") -> None:
         self._started_at_wall = _now_iso()
         self._started_at_mono = time.monotonic()
-        self._phase.transition("", self._started_at_mono)  # no-op until set_phase
+        # Seed the phase tracker so the very first sample (which the sampler
+        # may take immediately after the threads spin up) carries the right
+        # phase label instead of an empty string.
+        self._phase.transition(initial_phase, self._started_at_mono)
 
         run_row = self._snapshot_run_row(STATUS_RUNNING)
         try:
@@ -567,7 +570,7 @@ class NullMetricsCollector:
 
     run_id = ""
 
-    def start(self) -> None: ...
+    def start(self, initial_phase: str = "") -> None: ...
 
     def stop_and_finalize(
         self, status: str, error: BaseException | None = None

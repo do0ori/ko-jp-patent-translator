@@ -7,3 +7,4 @@ pydantic
 psutil
 gspread
 google-auth
+requests

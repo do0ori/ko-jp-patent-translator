@@ -7,6 +7,11 @@ DEFAULT_GEMINI_MODEL_DISPLAY_NAME = "Gemini 2.5 Flash"
 # (peak RAM ~430MB on the largest run, CPU 1-3%, zero 429s on clean runs).
 TRANSLATION_MAX_WORKERS = 16
 
+# Discord failure alerts. Webhook URL via st.secrets["discord_webhook_url"] or
+# env DISCORD_WEBHOOK_URL (handled in utils/notifications.py). An alert fires
+# once the SAME document fails this many times in a row within a session.
+DISCORD_ALERT_THRESHOLD = 2
+
 # Metrics → Google Sheets sink. Off by default; flip via env METRICS_ENABLED=1
 # or st.secrets["metrics_enabled"] (handled in utils/metrics.py).
 METRICS_ENABLED_ENV_VAR = "METRICS_ENABLED"

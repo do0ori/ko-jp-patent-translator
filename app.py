@@ -15,7 +15,11 @@ from utils import (
     parse_docx_with_images,
     translate_chunks_parallel,
 )
-from utils.config import METRICS_ENABLED_ENV_VAR, TRANSLATION_MAX_WORKERS
+from utils.config import (
+    DISCORD_ALERT_THRESHOLD,
+    METRICS_ENABLED_ENV_VAR,
+    TRANSLATION_MAX_WORKERS,
+)
 from utils.metrics import (
     PHASE_BUILDING_DOC,
     PHASE_TRANSLATING,
@@ -27,6 +31,8 @@ from utils.metrics import (
     set_active_collector,
 )
 from utils.metrics_sheets import build_sheets_sink_from_secrets
+from utils.notifications import notify_discord_failure
+from utils.translation import QuotaExhaustedError
 
 log = logging.getLogger(__name__)
 
@@ -188,11 +194,63 @@ def _count_output_chars(translated_chunks):
     return total
 
 
+def _describe_error(error: BaseException | None) -> str:
+    """Short Korean reason string for logs / Discord alerts."""
+    if isinstance(error, QuotaExhaustedError):
+        if error.scope == "per_day":
+            return f"Gemini 일일 쿼터/크레딧 소진 (결제·크레딧 확인 필요) — {error.detail}"
+        if error.scope == "per_minute":
+            return f"Gemini 분당 요청 한도 초과 (일시적) — {error.detail}"
+        return f"Gemini 쿼터 초과 — {error.detail}"
+    if error is None:
+        return "알 수 없는 오류"
+    return f"{type(error).__name__}: {error}"
+
+
+def _show_error_message(error: BaseException | None) -> None:
+    """Render a friendly st.error instead of leaking a raw traceback."""
+    if isinstance(error, QuotaExhaustedError) and error.scope == "per_day":
+        st.error(
+            "❌ Gemini 사용량/크레딧이 소진되어 번역에 실패했습니다.\n\n"
+            "결제 크레딧 잔액과, API 키가 속한 프로젝트의 결제 연결을 확인해 주세요. "
+            "일일 한도라면 태평양시간(PT) 자정에 초기화됩니다."
+        )
+    elif isinstance(error, QuotaExhaustedError):
+        st.error(
+            "❌ Gemini 요청 한도를 초과했습니다. 잠시 후 다시 시도하거나 "
+            "동시 작업 수(`?workers=N`)를 줄여 주세요."
+        )
+    else:
+        st.error("❌ 번역 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.")
+
+
+def _handle_failure(doc_name: str, error: BaseException | None, workers: int) -> None:
+    """Count consecutive failures of this doc; alert Discord past the threshold."""
+    counts = st.session_state.setdefault("failure_counts", {})
+    counts[doc_name] = counts.get(doc_name, 0) + 1
+    n = counts[doc_name]
+    log.warning("[run] translation failed (%s, %d회): %s", doc_name, n, _describe_error(error))
+    _show_error_message(error)
+    if n >= DISCORD_ALERT_THRESHOLD:
+        notify_discord_failure(
+            doc_name=doc_name,
+            consecutive_failures=n,
+            reason=_describe_error(error),
+            workers=workers,
+            model=DEFAULT_GEMINI_MODEL_NAME,
+        )
+
+
 # 번역 실행
 def run_translation(workers: int):
     chunks = st.session_state.chunked_elements
     total = len(chunks)
     doc = create_japanese_patent_docx()
+    doc_name = (
+        getattr(uploaded_file, "name", "")
+        or st.session_state.get("last_uploaded_filename", "")
+        or "(이름 없음)"
+    )
 
     def progress_cb(completed, total_n):
         progress_placeholder.progress(
@@ -227,14 +285,23 @@ def run_translation(workers: int):
 
         st.session_state.translated = True
         status = STATUS_OK
-    except BaseException as e:
+    except Exception as e:
+        # Swallow translation failures here (instead of re-raising into a raw
+        # Streamlit traceback) so the user gets a friendly message and we can
+        # track/alert on repeated failures. Truly fatal BaseExceptions
+        # (KeyboardInterrupt/SystemExit) still propagate.
         error = e
-        raise
     finally:
         try:
             collector.stop_and_finalize(status, error=error)
         except Exception:
             log.exception("[metrics] stop_and_finalize raised; ignoring")
+
+    if status == STATUS_OK:
+        # Clear the consecutive-failure streak for this document.
+        st.session_state.setdefault("failure_counts", {}).pop(doc_name, None)
+    else:
+        _handle_failure(doc_name, error, workers)
 
 
 # 번역 시작 버튼

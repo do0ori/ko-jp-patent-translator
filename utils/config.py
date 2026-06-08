@@ -2,8 +2,10 @@
 DEFAULT_GEMINI_MODEL_NAME = "gemini-2.5-flash"
 DEFAULT_GEMINI_MODEL_DISPLAY_NAME = "Gemini 2.5 Flash"
 
-# Parallel translation: max concurrent API requests (Tier 1 friendly)
-TRANSLATION_MAX_WORKERS = 8
+# Parallel translation: max concurrent API requests (Tier 1 friendly).
+# Bumped from 8 → 16 after observing ample headroom in metrics
+# (peak RAM ~430MB on the largest run, CPU 1-3%, zero 429s on clean runs).
+TRANSLATION_MAX_WORKERS = 16
 
 # Metrics → Google Sheets sink. Off by default; flip via env METRICS_ENABLED=1
 # or st.secrets["metrics_enabled"] (handled in utils/metrics.py).

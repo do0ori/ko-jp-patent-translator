@@ -2,10 +2,14 @@
 DEFAULT_GEMINI_MODEL_NAME = "gemini-2.5-flash"
 DEFAULT_GEMINI_MODEL_DISPLAY_NAME = "Gemini 2.5 Flash"
 
-# Parallel translation: max concurrent API requests (Tier 1 friendly).
-# Bumped from 8 → 16 after observing ample headroom in metrics
-# (peak RAM ~430MB on the largest run, CPU 1-3%, zero 429s on clean runs).
-TRANSLATION_MAX_WORKERS = 16
+# Parallel translation: max concurrent API requests. Effective concurrency is
+# min(this, n_chunks), so >16 only helps the rare large doc (most have <16
+# chunks). Tier 1 rate limits are far away (tiny per-doc token volume); the real
+# ceiling is RAM from in-flight FIGURE images, which tracks image *size* not
+# count (a 26-figure doc peaked ~430MB at 8 workers while a 15-figure doc hit
+# only ~335MB at 16). 24 is a conservative step under the ?workers clamp of 32,
+# leaving headroom below Streamlit Community's ~1GB. Override per-run: ?workers=N.
+TRANSLATION_MAX_WORKERS = 24
 
 # Discord failure alerts. Webhook URL via st.secrets["discord_webhook_url"] or
 # env DISCORD_WEBHOOK_URL (handled in utils/notifications.py). An alert fires

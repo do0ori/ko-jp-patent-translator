@@ -1,10 +1,9 @@
-from io import BytesIO
-
 from docx import Document
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.oxml.ns import qn
 from docx.shared import Pt
-from PIL import Image
+
+from utils.image_utils import load_or_convert_image
 
 
 def parse_docx_with_images(docx_file):
@@ -18,8 +17,9 @@ def parse_docx_with_images(docx_file):
         rel_obj = rels[rel]
         if "image" in rel_obj.reltype:
             image_bytes = rel_obj.target_part.blob
-            image = Image.open(BytesIO(image_bytes))
-            image_map[rel_obj.rId] = image
+            image = load_or_convert_image(image_bytes)
+            if image is not None:
+                image_map[rel_obj.rId] = image
 
     for para in doc.paragraphs:
         text = para.text.strip()

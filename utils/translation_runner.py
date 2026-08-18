@@ -32,9 +32,16 @@ def _translate_single_chunk(
         )
         chunk["translated"] = translated
     elif chunk["type"] == "FIGURE":
-        chunk["translated"] = translate_image_with_gemini(
-            chunk["content"], model_name, metrics=metrics
-        )
+        try:
+            chunk["translated"] = translate_image_with_gemini(
+                chunk["content"], model_name, metrics=metrics
+            )
+        except Exception as e:
+            log.warning(
+                "FIGURE chunk translation failed: %s. Continuing with empty translation.",
+                e,
+            )
+            chunk["translated"] = []
     return chunk
 
 

@@ -343,6 +343,9 @@ def translate_image_with_gemini(
     model_name: str = DEFAULT_GEMINI_MODEL_NAME,
     metrics: MetricsCollector | NullMetricsCollector | None = None,
 ) -> list[ImageTranslation]:
+    if pil_image is None:
+        return []
+
     metrics = metrics or NullMetricsCollector()
 
     def call_gemini_api():
@@ -357,4 +360,13 @@ def translate_image_with_gemini(
         )
         return response.parsed
 
-    return retry_with_delay(call_gemini_api, metrics=metrics)
+    try:
+        return retry_with_delay(call_gemini_api, metrics=metrics)
+    except QuotaExhaustedError:
+        raise
+    except Exception as exc:
+        logging.warning(
+            "Image translation failed: %s. Continuing translation without this figure.",
+            exc,
+        )
+        return []

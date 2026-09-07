@@ -1,10 +1,30 @@
 import unittest
+from types import SimpleNamespace
 from unittest.mock import ANY, patch
 
 from utils import translation
 
 
 class TestTranslateTextFlow(unittest.TestCase):
+    def test_none_structured_response_is_retried(self):
+        """A 200 response with parsed=None must not fail at len(None)."""
+        responses = iter(
+            [
+                SimpleNamespace(parsed=None),
+                SimpleNamespace(parsed=["ja-a"]),
+            ]
+        )
+        client = SimpleNamespace(
+            models=SimpleNamespace(generate_content=lambda **_: next(responses))
+        )
+
+        with patch("utils.translation._get_client", return_value=client):
+            result = translation._translate_text_batch_with_retry(
+                ["a"], model_name="m", max_retries=2, metrics=translation.NullMetricsCollector()
+            )
+
+        self.assertEqual(result, ["ja-a"])
+
     def test_empty_paragraphs_returns_empty_list(self):
         result = translation.translate_text_with_gemini([])
         self.assertEqual(result, [])

@@ -204,7 +204,24 @@ def _translate_text_batch_with_retry(
                 "response_schema": list[str],
             },
         )
-        result: list[str] = response.parsed
+        result = response.parsed
+        # A successful HTTP response does not guarantee that the SDK could
+        # deserialize the model output.  Gemini occasionally returns a 200
+        # response with ``parsed`` set to None (for example, after an
+        # incomplete or otherwise invalid structured response).  Treat that
+        # exactly like a malformed paragraph-count response so the existing
+        # retry/split recovery path handles it instead of calling len(None).
+        if not isinstance(result, list):
+            raise ParagraphMismatchError(
+                "Expected "
+                f"{expected_len} paragraphs but Gemini returned a "
+                f"{type(result).__name__} instead of a JSON array"
+            )
+        if any(not isinstance(paragraph, str) for paragraph in result):
+            raise ParagraphMismatchError(
+                "Expected a JSON array of translated strings but Gemini "
+                "returned an invalid array"
+            )
         if len(result) != expected_len:
             raise ParagraphMismatchError(
                 f"Expected {expected_len} paragraphs but got {len(result)}"

@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from utils.config import (
     DEFAULT_GEMINI_MODEL_NAME,
+    GEMINI_API_VERSION,
     IMAGE_TRANSLATION_PROMPT,
     TEXT_TRANSLATION_PROMPT,
 )
@@ -40,7 +41,10 @@ def _get_client():
                     "GEMINI_API_KEY not found in st.secrets or GEMINI_API_KEY env"
                 )
     if not getattr(_tls, "client", None):
-        _tls.client = genai.Client(api_key=_api_key)
+        _tls.client = genai.Client(
+            api_key=_api_key,
+            http_options={"api_version": GEMINI_API_VERSION},
+        )
     return _tls.client
 
 

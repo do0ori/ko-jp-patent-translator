@@ -2,6 +2,11 @@
 DEFAULT_GEMINI_MODEL_NAME = "gemini-2.5-flash"
 DEFAULT_GEMINI_MODEL_DISPLAY_NAME = "Gemini 2.5 Flash"
 
+# Pinned explicitly: structured output (response_mime_type / response_schema)
+# is only served on v1beta. v1 answers "400 JSON mode is not enabled for api
+# version v1", and google-genai 3.0.0 changed the SDK default from v1beta to v1.
+GEMINI_API_VERSION = "v1beta"
+
 # Parallel translation: max concurrent API requests. Effective concurrency is
 # min(this, n_chunks), so >16 only helps the rare large doc (most have <16
 # chunks). Tier 1 rate limits are far away (tiny per-doc token volume); the real
